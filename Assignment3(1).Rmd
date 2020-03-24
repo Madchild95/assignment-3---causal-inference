@@ -126,12 +126,13 @@ plot(conditional_effects(AltercentricDiagnosis_m), points=T)
 
 Q1.2) Is altercentric intrusion related to specific symptoms *in the patients*? Identify which of the symptoms could be relevant. Should you include more than one symptom? Build models, priors, predictive checks. Assess the evidence and report models and results, including plots. Discuss whether the results make sense.
 
+All the univariate models
 ```{r}
 #Isolate the patients
 d2 <- filter(d,Diagnosis == "Schizophrenia")
 
 ##Model the three univariate models##
-plot(d2,VoiceHearing~AltercentricIntrusion)
+plot(AltercentricIntrusion~VoiceHearing, d2)
 
 ## Voice hearing ##
 
@@ -267,14 +268,164 @@ Altercentric_Apathy_m <- brm(
 #Posterior predictive checks
 pp_check(Altercentric_Apathy_m, nsamples = 100)
 Altercentric_Apathy_m
+```
 
-
+Voice hearing and mind reading model
+```{r}
 ##Model the multivariate regression##
+#mean-centering
+d2 <- d2 %>% 
+  mutate(
+    VoiceHearing_s = VoiceHearing - mean(VoiceHearing),
+    MindReading_s = MindReading - mean(MindReading),
+    Apathy_s = Apathy - mean(Apathy)
+  )
 
-#VH, MR and apathy
-AltercentricIntrusion ~ VoiceHearing + MindReading + Apathy
+round(mean(d2$VoiceHearing_s),3)
 
+#Multivariate VH and MR 
+VH_MR_f <- bf(
+  AltercentricIntrusion ~ 1 + MindReading_s + VoiceHearing_s
+)
+get_prior(VH_MR_f, d2)
+mean(d2$AltercentricIntrusion)
+
+#Define priors
+priorList <- c(
+  prior(normal(4, 1), class = Intercept),
+  prior(normal(0.1,1), class = b), # for beta
+  prior(normal(1, 2), class = sigma)
+) 
+
+#Prior checks
+VH_MR_PriorCheck <- brm(
+  formula = VH_MR_f,
+  data = d2,
+  family = gaussian,
+  prior = priorList,
+  sample_prior = "only" #does not take data into account
+)
+
+#Prior predictive checks
+pp_check(VH_MR_PriorCheck, nsamples = 100)
+
+## Fitting the model
+VH_MR_m <- brm(
+  formula = VH_MR_f,
+  data = d2,
+  family = gaussian,
+  prior = priorList,
+  sample_prior = T #takes data into account
+)
+
+#Posterior predictive checks
+pp_check(VH_MR_m, nsamples = 100)
+VH_MR_m
 #plots...
+
+```
+
+Apathy and Voice hearing model
+```{r}
+#Multivariate VH and Apathy 
+VH_A_f <- bf(
+  AltercentricIntrusion ~ 1 + Apathy_s + VoiceHearing_s
+)
+get_prior(VH_A_f, d2)
+mean(d2$AltercentricIntrusion)
+
+#Define priors
+priorList <- c(
+  prior(normal(4, 1), class = Intercept),
+  prior(normal(-0.5,1), class = b, coef = Apathy_s), # for beta
+  prior(normal(0.5,1), class = b, coef = VoiceHearing_s), # for beta
+  prior(normal(1, 2), class = sigma)
+) 
+
+#Prior checks
+VH_A_PriorCheck <- brm(
+  formula = VH_A_f,
+  data = d2,
+  family = gaussian,
+  prior = priorList,
+  sample_prior = "only" #does not take data into account
+)
+
+#Prior predictive checks
+pp_check(VH_A_PriorCheck, nsamples = 100)
+
+## Fitting the model
+VH_A_m <- brm(
+  formula = VH_A_f,
+  data = d2,
+  family = gaussian,
+  prior = priorList,
+  sample_prior = T #takes data into account
+)
+
+#Posterior predictive checks
+pp_check(VH_A_m, nsamples = 100)
+print(VH_A_m, digits = 3)
+```
+
+All predictors
+```{r}
+# Define the formula
+VoiceMindApathy <- bf(
+  AltercentricIntrusion ~ 1 + VoiceHearing_s + MindReading_s + Apathy_s)
+# Design the priors
+get_prior(VoiceMindApathy, family = gaussian, d2)
+prior_VoiceMindApathy <- c(
+  prior(normal(4, 1), class = Intercept), # It is a good guess that when voice hearing and mind reading er mean, 
+  prior(normal(0.1, 1), class = b, coef = VoiceHearing_s),# så er AI også
+  prior(normal(0.1, 1), class = b, coef = MindReading_s),
+  prior(normal(-0.5, 1), class = b, coef = Apathy_s),
+  prior(normal(1, 2), class = sigma) # average error we expect
+) 
+# Test the priors
+VoiceMindApathy_m <- brm(
+  formula = VoiceMindApathy,
+  data = d2,
+  family = gaussian,
+  prior = prior_VoiceMindApathy,
+  sample_prior = "only" # meaning we don't take the data into account
+)
+# check how the prediction given only the priors and not the data will look like 
+pp_check(VoiceMindApathy_m, nsamples = 100)
+## Fitting the model
+VoiceMindApathy_m2 <- brm(
+  formula = VoiceMindApathy,
+  data = d2,
+  family = gaussian,
+  prior = prior_VoiceMindApathy,
+  sample_prior = T # only change, now we take data into account
+)
+# Posterior predictive check
+pp_check(VoiceMindApathy_m2, nsamples = 100)
+## Check the model for warnings
+VoiceMindApathy_m2
+
+```
+
+
+```{r}
+#Plots
+# Hypothesis testing + updating check
+plot(hypothesis(VoiceMindApathy_m2,
+           "Apathy_s > Intercept",
+          ))
+
+hypothesis(VoiceMindApathy_m2,
+           "Apathy_s > Intercept")
+
+?hypothesis
+#4000 samples define our posterior
+#Evidence ratio = if you take the amount
+?conditional_effects()
+
+conditional_effects(Altercentric_Apathy_m)
+
+plot(conditional_effects(VoiceMindApathy_m2), points=T)
 ```
 
 
